@@ -29,7 +29,7 @@ const run = async () => {
     });
 
     app.get('/books/last-ten', async (req, res) => {
-      const cursor = bookCollection.find({}).sort({ createdAt: 1 }).limit(10);
+      const cursor = bookCollection.find({}).sort({ createdAt: -1 }).limit(10);
       const book = await cursor.toArray();
 
       res.send({ status: true, data: book });
