@@ -67,6 +67,27 @@ const run = async () => {
       res.send(result);
     });
 
+    app.patch('/book/add-review/:id', async (req, res) => {
+      const id = req.params.id;
+
+      const review = req.body.review;
+
+      const result = await bookCollection.updateOne(
+          { _id: ObjectId(id) },
+          {
+            $push: {
+              reviews: {
+                $each: [review],
+                $position: 0
+              }
+            }
+          }
+      );
+
+      console.log(result);
+      res.send(result);
+    });
+
     app.delete('/book/:id', async (req, res) => {
       const id = req.params.id;
 
