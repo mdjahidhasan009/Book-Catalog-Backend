@@ -36,7 +36,9 @@ const run = async () => {
     });
 
     app.post('/book', async (req, res) => {
-      const book = req.body;
+      let book = req.body;
+      book.reviews = [];
+      book.createdAt = new Date();
 
       const result = await bookCollection.insertOne(book);
 
