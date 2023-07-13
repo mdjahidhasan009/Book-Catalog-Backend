@@ -19,19 +19,26 @@ const client = new MongoClient(uri, {
 const run = async () => {
   try {
     const db = client.db('technet-server-L2');
-    const productCollection = db.collection('books');
+    const bookCollection = db.collection('books');
 
     app.get('/books', async (req, res) => {
-      const cursor = productCollection.find({});
-      const product = await cursor.toArray();
+      const cursor = bookCollection.find({});
+      const book = await cursor.toArray();
 
-      res.send({ status: true, data: product });
+      res.send({ status: true, data: book });
+    });
+
+    app.get('/books/last-ten', async (req, res) => {
+      const cursor = bookCollection.find({}).sort({ createdAt: 1 }).limit(10);
+      const book = await cursor.toArray();
+
+      res.send({ status: true, data: book });
     });
 
     app.post('/book', async (req, res) => {
-      const product = req.body;
+      const book = req.body;
 
-      const result = await productCollection.insertOne(product);
+      const result = await bookCollection.insertOne(book);
 
       res.send(result);
     });
@@ -39,7 +46,7 @@ const run = async () => {
     app.get('/book/:id', async (req, res) => {
       const id = req.params.id;
 
-      const result = await productCollection.findOne({ _id: ObjectId(id) });
+      const result = await bookCollection.findOne({ _id: ObjectId(id) });
       console.log(result);
       res.send(result);
     });
@@ -47,28 +54,28 @@ const run = async () => {
     app.delete('/book/:id', async (req, res) => {
       const id = req.params.id;
 
-      const result = await productCollection.deleteOne({ _id: ObjectId(id) });
+      const result = await bookCollection.deleteOne({ _id: ObjectId(id) });
       console.log(result);
       res.send(result);
     });
 
     app.post('/comment/:id', async (req, res) => {
-      const productId = req.params.id;
+      const bookId = req.params.id;
       const comment = req.body.comment;
 
-      console.log(productId);
+      console.log(bookId);
       console.log(comment);
 
-      const result = await productCollection.updateOne(
-        { _id: ObjectId(productId) },
+      const result = await bookCollection.updateOne(
+        { _id: ObjectId(bookId) },
         { $push: { comments: comment } }
       );
 
       console.log(result);
 
       if (result.modifiedCount !== 1) {
-        console.error('Product not found or comment not added');
-        res.json({ error: 'Product not found or comment not added' });
+        console.error('book not found or comment not added');
+        res.json({ error: 'book not found or comment not added' });
         return;
       }
 
@@ -77,17 +84,17 @@ const run = async () => {
     });
 
     app.get('/comment/:id', async (req, res) => {
-      const productId = req.params.id;
+      const bookId = req.params.id;
 
-      const result = await productCollection.findOne(
-        { _id: ObjectId(productId) },
+      const result = await bookCollection.findOne(
+        { _id: ObjectId(bookId) },
         { projection: { _id: 0, comments: 1 } }
       );
 
       if (result) {
         res.json(result);
       } else {
-        res.status(404).json({ error: 'Product not found' });
+        res.status(404).json({ error: 'book not found' });
       }
     });
 
