@@ -197,10 +197,9 @@ const run = async () => {
       const bookId = req.body?.bookId;
       const userEmail = req.body?.userEmail
 
-      console.log(bookId, userEmail)
       const isWishlistExitsForUser = await userCollection.findOne({ email: userEmail });
       if(!isWishlistExitsForUser) {
-        const result = await userCollection.insertOne({ email: userEmail, wishlist: [bookId] });
+        const result = await userCollection.insertOne({ email: userEmail, wishlist: [ObjectId(bookId)] });
         return res.send(result);
       }
       else {
@@ -255,6 +254,125 @@ const run = async () => {
       }
 
       res.send(result);
+    });
+
+    app.get('/readinglist/:userEmail', async (req, res) => {
+      const userEmail = req.params?.userEmail;
+
+      const result = await userCollection.aggregate([
+        { $match: { email: userEmail }},
+        { $unwind: '$readinglist' },
+        {
+          $lookup:
+              {
+                from: 'books',
+                localField: 'readinglist.bookId',
+                foreignField: '_id',
+                as: 'bookDetails'
+              }
+        },
+        {
+          $addFields: {
+            book: { $arrayElemAt: ["$bookDetails", 0] },
+            isFinished: "$readinglist.isFinished"
+          }
+        },
+        { $project: { readinglist: 0, bookDetails: 0 } },
+        {
+          $group: {
+            _id: "$_id",
+            readinglist: {
+              $push: {
+                _id: "$book._id",
+                title: "$book.title",
+                author: "$book.author",
+                genre: "$book.genre",
+                publicationDate: "$book.publicationDate",
+                image: "$book.image",
+                price: "$book.price",
+                isFinished: "$isFinished"
+              }
+            }
+          }
+        },
+        {
+          $project: {
+            _id: 0,
+            readinglist: 1
+          }
+        }
+      ]).toArray();
+
+      if (result) {
+        res.json(result[0]);
+      } else {
+        res.status(404).json({ error: 'user not found' });
+      }
+    });
+
+    app.post('/readinglist', async (req, res) => {
+      const { userEmail, bookId } = req.body;
+
+      const isUserExits = await userCollection.findOne({ email: userEmail });
+      if(!isUserExits) {
+        const result = await userCollection.insertOne(
+            { email: userEmail,
+              readinglist: [
+                  {
+                    bookId: ObjectId(bookId),
+                    isFinished: false
+                  }
+              ]
+            });
+        return res.send(result);
+      }
+      else {
+        const result = await userCollection.updateOne(
+            { email: userEmail },
+            { $addToSet:
+              {
+                readinglist: {
+                  bookId: ObjectId(bookId),
+                  isFinished: false
+                }
+              }
+            }
+        );
+        res.send(result);
+      }
+
+      res.send(result);
+    })
+
+    app.patch('/readinglist', async (req, res) => {
+      const { userEmail, bookId, isFinished } = req.body;
+
+      const result = await userCollection.updateOne(
+          { email: userEmail, "readinglist.bookId": ObjectId(bookId) },
+          { $set: { "readinglist.$.isFinished": isFinished } }
+      );
+
+      if (result.modifiedCount !== 1) {
+        return res.status(404).json({ error: 'No matching user/book found or update failed.' });
+      }
+
+      res.json({ message: 'Reading list updated successfully.' });
+    });
+
+    app.delete('/readinglist/:userEmail/:bookId', async (req, res) => {
+      const userEmail = req.params.userEmail;
+      const bookId = ObjectId(req.params.bookId);
+
+      const result = await userCollection.updateOne(
+          { email: userEmail },
+          { $pull: { readinglist: { bookId: bookId } } }
+      );
+
+      if (result.modifiedCount !== 1) {
+        return res.status(404).json({ error: 'No matching user/book found or deletion failed.' });
+      }
+
+      res.json({ message: 'Book removed from reading list successfully.' });
     });
 
   }
