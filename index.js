@@ -20,6 +20,7 @@ const run = async () => {
   try {
     const db = client.db('technet-server-L2');
     const bookCollection = db.collection('books');
+    const userCollection = db.collection('users');
 
     app.get('/books', async (req, res) => {
       const cursor = bookCollection.find({});
@@ -154,7 +155,115 @@ const run = async () => {
 
       res.send({ status: false });
     });
-  } finally {
+
+    app.get('/wishlist/:userEmail', async (req, res) => {
+      const email = req.params?.userEmail;
+
+      const result = await userCollection.aggregate([
+        { $match: { email: email } },
+        { $unwind: "$wishlist" },
+        {
+          $lookup:
+              {
+                from: "books",
+                localField: "wishlist",
+                foreignField: "_id",
+                as: "bookDetails"
+              }
+        },
+        {
+          $group: {
+            _id: "$email",
+            wishlist: { $push: { $arrayElemAt: ["$bookDetails", 0] } }
+          }
+        },
+        {
+          $project: {
+            _id: 0,
+            wishlist: 1
+          }
+        }
+      ]).toArray();
+
+      if (result.length) {
+        res.json(result[0]);
+      } else {
+        res.status(404).json({ error: 'user not found' });
+      }
+    });
+
+    app.post('/wishlist', async (req, res) => {
+      const userId = req.params.userId;
+      const bookId = req.body?.bookId;
+      const userEmail = req.body?.userEmail
+
+      console.log(bookId, userEmail)
+      const isWishlistExitsForUser = await userCollection.findOne({ email: userEmail });
+      if(!isWishlistExitsForUser) {
+        const result = await userCollection.insertOne({ email: userEmail, wishlist: [bookId] });
+        return res.send(result);
+      }
+      else {
+        const result = await userCollection.updateOne(
+            { email: userEmail },
+            { $addToSet: { wishlist: ObjectId(bookId) } }
+        );
+        res.send(result);
+      }
+    });
+
+    app.delete('/wishlist/:userEmail/:bookId', async (req, res) => {
+      const userEmail = req.params?.userEmail;
+      const bookId = req.params?.bookId;
+      console.log(userEmail, bookId)
+
+      let result = await userCollection.updateOne(
+          { email: userEmail },
+          { $pull: { wishlist: ObjectId(bookId) } }
+      );
+
+      result = await userCollection.aggregate([
+        { $match: { email: userEmail } },
+        { $unwind: "$wishlist" },
+        {
+          $lookup:
+              {
+                from: "books",
+                localField: "wishlist",
+                foreignField: "_id",
+                as: "bookDetails"
+              }
+        },
+        {
+          $group: {
+            _id: "$email",
+            wishlist: { $push: { $arrayElemAt: ["$bookDetails", 0] } }
+          }
+        },
+        {
+          $project: {
+            _id: 0,
+            wishlist: 1
+          }
+        }
+      ]).toArray();
+
+      if (result.length) {
+        res.json(result[0]);
+      } else {
+        res.status(404).json({ error: 'user not found' });
+      }
+
+      res.send(result);
+    });
+
+  }
+  catch (err) {
+    console.log(err);
+    res.status(500).send({ message: err.message });
+  }
+  finally {
+
   }
 };
 
